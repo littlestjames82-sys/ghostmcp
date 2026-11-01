@@ -47,6 +47,13 @@ def build_parser() -> argparse.ArgumentParser:
                         version=f"ghostmcp {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    p_serve = sub.add_parser(
+        "serve", help="persistent session daemon: JSON-line "
+                      "requests on stdin, one session per "
+                      "server kept alive across requests")
+    p_serve.add_argument("--config", required=True,
+                         help="path to the MCP config file")
+
     p_servers = sub.add_parser(
         "servers", help="list the servers in a config file "
                         "(never connects, never prints env values)")
@@ -119,6 +126,9 @@ def main(argv=None) -> int:
     parser = build_parser()
     try:
         args = parser.parse_args(argv)
+        if args.command == "serve":
+            from .serve import serve
+            return serve(args.config)
         if args.command == "servers":
             out = {"config": args.config,
                    "servers": describe_servers(args.config)}
