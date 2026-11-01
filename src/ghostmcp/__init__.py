@@ -3,9 +3,12 @@
 GhostMCP speaks JSON-RPC 2.0 to MCP servers from a standard MCP
 config file (the ``.mcp.json`` shape): stdio servers spawned as
 child processes, and HTTP servers over Streamable-HTTP-style
-POSTs. It covers the client basics — the ``initialize``
-handshake, ``tools/list`` and ``tools/call`` — in pure Python
-stdlib, so it runs anywhere GhostIDE runs, including on-device.
+POSTs. It covers the ``initialize`` handshake, ``tools/list``
+and ``tools/call``, and (0.2.0) ``resources/list``,
+``resources/read``, ``prompts/list`` and ``prompts/get`` — in
+pure Python stdlib, so it runs anywhere GhostIDE runs,
+including on-device. Binary resource contents are reported by
+size only, never dumped.
 
 Design: one fresh session per CLI invocation. A server process
 is spawned, used for a single listing or call, and always
@@ -14,4 +17,4 @@ values from the config are passed to stdio servers but never
 printed — only env names are ever reported.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

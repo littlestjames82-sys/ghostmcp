@@ -5,6 +5,12 @@
         [--timeout N]
     python -m ghostmcp call --config <path> --server <name>
         --tool <name> --args '<json object>' [--timeout N]
+    python -m ghostmcp resources --config <path> --server <name>
+    python -m ghostmcp resource --config <path> --server <name>
+        --uri <uri>
+    python -m ghostmcp prompts --config <path> --server <name>
+    python -m ghostmcp prompt --config <path> --server <name>
+        --name <prompt> [--args '<json object>']
 
 Every verb prints ONE JSON object to stdout. Failures print
 ``{"error": "..."}`` to stdout and exit 2 — including a tool
@@ -19,7 +25,8 @@ import sys
 
 from . import __version__
 from .client import (DEFAULT_TIMEOUT, McpError, call_tool,
-                     describe_servers, list_tools)
+                     describe_servers, get_prompt, list_prompts,
+                     list_resources, list_tools, read_resource)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -71,6 +78,40 @@ def build_parser() -> argparse.ArgumentParser:
                         default=DEFAULT_TIMEOUT,
                         help="seconds to allow for the whole "
                              "invocation (default 30)")
+
+    def _server_args(p):
+        p.add_argument("--config", required=True,
+                       help="path to the MCP config file")
+        p.add_argument("--server", required=True,
+                       help="server name from the config")
+        p.add_argument("--timeout", type=float,
+                       default=DEFAULT_TIMEOUT,
+                       help="seconds to allow for the whole "
+                            "invocation (default 30)")
+
+    p_res = sub.add_parser(
+        "resources", help="list one server's resources")
+    _server_args(p_res)
+
+    p_read = sub.add_parser(
+        "resource", help="read one resource by URI (binary "
+                         "contents are reported by size only)")
+    _server_args(p_read)
+    p_read.add_argument("--uri", required=True,
+                        help="the resource URI to read")
+
+    p_prompts = sub.add_parser(
+        "prompts", help="list one server's prompts")
+    _server_args(p_prompts)
+
+    p_prompt = sub.add_parser(
+        "prompt", help="get one prompt, rendered to messages")
+    _server_args(p_prompt)
+    p_prompt.add_argument("--name", required=True,
+                          help="prompt name to get")
+    p_prompt.add_argument("--args", default="{}",
+                          help="prompt arguments as a JSON "
+                               "object (default {})")
     return parser
 
 
@@ -87,6 +128,18 @@ def main(argv=None) -> int:
         elif args.command == "call":
             out = call_tool(args.config, args.server, args.tool,
                             args.args, args.timeout)
+        elif args.command == "resources":
+            out = list_resources(args.config, args.server,
+                                 args.timeout)
+        elif args.command == "resource":
+            out = read_resource(args.config, args.server,
+                                args.uri, args.timeout)
+        elif args.command == "prompts":
+            out = list_prompts(args.config, args.server,
+                               args.timeout)
+        elif args.command == "prompt":
+            out = get_prompt(args.config, args.server, args.name,
+                             args.args, args.timeout)
         else:  # unreachable: argparse requires a verb
             raise McpError("no verb given")
     except McpError as e:

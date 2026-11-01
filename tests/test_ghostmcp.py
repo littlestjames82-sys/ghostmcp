@@ -71,6 +71,44 @@ def handle(msg):
             return {"jsonrpc": "2.0", "id": mid, "error": {
                 "code": -32602, "message": "unknown tool"}}
         return {"jsonrpc": "2.0", "id": mid, "result": result}
+    if method == "resources/list":
+        return {"jsonrpc": "2.0", "id": mid, "result": {
+            "resources": [
+                {"uri": "note://hello", "name": "Hello note",
+                 "mimeType": "text/plain",
+                 "description": "A small text resource."},
+                {"uri": "blob://pic", "name": "Picture",
+                 "mimeType": "image/png"}]}}
+    if method == "resources/read":
+        uri = (msg.get("params") or {}).get("uri")
+        if uri == "note://hello":
+            return {"jsonrpc": "2.0", "id": mid, "result": {
+                "contents": [{"uri": uri,
+                              "mimeType": "text/plain",
+                              "text": "hello resource"}]}}
+        if uri == "blob://pic":
+            return {"jsonrpc": "2.0", "id": mid, "result": {
+                "contents": [{"uri": uri,
+                              "mimeType": "image/png",
+                              "blob": "QkxPQkJBU0U2NA=="}]}}
+        return {"jsonrpc": "2.0", "id": mid, "error": {
+            "code": -32602, "message": "unknown resource"}}
+    if method == "prompts/list":
+        return {"jsonrpc": "2.0", "id": mid, "result": {
+            "prompts": [{"name": "greet",
+                         "description": "Greet someone.",
+                         "arguments": [
+                             {"name": "who", "required": True},
+                             {"name": "tone",
+                              "required": False}]}]}}
+    if method == "prompts/get":
+        params = msg.get("params") or {}
+        who = (params.get("arguments") or {}).get("who", "?")
+        return {"jsonrpc": "2.0", "id": mid, "result": {
+            "description": "Greet someone.",
+            "messages": [{"role": "user", "content": {
+                "type": "text",
+                "text": "Say hello to " + str(who) + "."}}]}}
     if mid is None:
         return None  # a notification: no reply
     return {"jsonrpc": "2.0", "id": mid, "error": {
@@ -348,3 +386,64 @@ def test_http_sse_tools(tmp_path):
         assert code == 0
         assert {t["name"] for t in out["tools"]} == \
             {"echo", "add", "fail"}
+
+
+# ---------------- 0.2.0: resources + prompts ----------------
+
+def test_resources_list_and_read_text(stdio_config):
+    code, out, _ = run_cli("resources", "--config",
+                           str(stdio_config), "--server",
+                           "fixture")
+    assert code == 0
+    assert [r["uri"] for r in out["resources"]] == \
+        ["note://hello", "blob://pic"]
+    code, out, _ = run_cli("resource", "--config",
+                           str(stdio_config), "--server",
+                           "fixture", "--uri", "note://hello")
+    assert code == 0
+    assert out["contents"][0]["text"] == "hello resource"
+
+
+def test_resource_blob_is_reported_by_size_never_dumped(
+        stdio_config):
+    code, out, raw = run_cli("resource", "--config",
+                             str(stdio_config), "--server",
+                             "fixture", "--uri", "blob://pic")
+    assert code == 0
+    entry = out["contents"][0]
+    assert entry["blob_base64_chars"] == len("QkxPQkJBU0U2NA==")
+    assert "QkxPQkJBU0U2NA==" not in raw
+
+
+def test_resource_unknown_uri_is_a_clean_error(stdio_config):
+    code, out, _ = run_cli("resource", "--config",
+                           str(stdio_config), "--server",
+                           "fixture", "--uri", "nope://x")
+    assert code == 2
+    assert "unknown resource" in out["error"]
+
+
+def test_prompts_list_and_get(stdio_config):
+    code, out, _ = run_cli("prompts", "--config",
+                           str(stdio_config), "--server",
+                           "fixture")
+    assert code == 0
+    assert out["prompts"][0]["name"] == "greet"
+    assert out["prompts"][0]["arguments"][0] == \
+        {"name": "who", "required": True}
+    code, out, _ = run_cli("prompt", "--config",
+                           str(stdio_config), "--server",
+                           "fixture", "--name", "greet",
+                           "--args", json.dumps({"who": "Ada"}))
+    assert code == 0
+    assert out["messages"] == [
+        {"role": "user", "text": "Say hello to Ada."}]
+
+
+def test_prompt_bad_args_json_is_a_clean_error(stdio_config):
+    code, out, _ = run_cli("prompt", "--config",
+                           str(stdio_config), "--server",
+                           "fixture", "--name", "greet",
+                           "--args", "not json")
+    assert code == 2
+    assert "not valid JSON" in out["error"]

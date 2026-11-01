@@ -446,6 +446,118 @@ def summarize_result(result):
     return bool(result.get("isError")), text
 
 
+def _list_all(session, method, key, server_name):
+    """One paged list call, following nextCursor."""
+    items, cursor = [], None
+    while True:
+        params = {} if cursor is None else {"cursor": cursor}
+        result = session.request(method, params)
+        if not isinstance(result, dict):
+            raise McpError(
+                f"server '{server_name}' sent a malformed "
+                f"{method} result")
+        for it in result.get(key) or []:
+            if isinstance(it, dict):
+                items.append(it)
+        cursor = result.get("nextCursor")
+        if not cursor:
+            break
+    return items
+
+
+def list_resources(config_path, server_name,
+                   timeout=DEFAULT_TIMEOUT):
+    with open_session(config_path, server_name, timeout) as s:
+        found = _list_all(s, "resources/list", "resources",
+                          server_name)
+    return {"server": server_name, "resources": [{
+        "uri": r.get("uri"),
+        "name": r.get("name") or "",
+        "mimeType": r.get("mimeType") or "",
+        "description": r.get("description") or "",
+    } for r in found]}
+
+
+def read_resource(config_path, server_name, uri,
+                  timeout=DEFAULT_TIMEOUT):
+    """One resource's contents. Text comes back capped;
+    binary (blob) contents are reported by size only -
+    their bytes are never dumped into the output."""
+    with open_session(config_path, server_name, timeout) as s:
+        result = s.request("resources/read", {"uri": uri})
+    if not isinstance(result, dict):
+        raise McpError(
+            f"server '{server_name}' sent a malformed "
+            "resources/read result")
+    contents = []
+    for c in result.get("contents") or []:
+        if not isinstance(c, dict):
+            continue
+        entry = {"uri": c.get("uri") or uri,
+                 "mimeType": c.get("mimeType") or ""}
+        if isinstance(c.get("text"), str):
+            text = c["text"]
+            if len(text) > TEXT_CAP:
+                text = text[:TEXT_CAP]
+            entry["text"] = text
+        elif isinstance(c.get("blob"), str):
+            entry["blob_base64_chars"] = len(c["blob"])
+        else:
+            entry["text"] = ""
+        contents.append(entry)
+    return {"server": server_name, "uri": uri,
+            "contents": contents}
+
+
+def list_prompts(config_path, server_name,
+                 timeout=DEFAULT_TIMEOUT):
+    with open_session(config_path, server_name, timeout) as s:
+        found = _list_all(s, "prompts/list", "prompts",
+                          server_name)
+    return {"server": server_name, "prompts": [{
+        "name": p.get("name"),
+        "description": p.get("description") or "",
+        "arguments": [{
+            "name": a.get("name"),
+            "required": bool(a.get("required")),
+        } for a in p.get("arguments") or []
+            if isinstance(a, dict)],
+    } for p in found]}
+
+
+def get_prompt(config_path, server_name, prompt_name, args_json,
+               timeout=DEFAULT_TIMEOUT):
+    try:
+        arguments = json.loads(args_json)
+    except ValueError:
+        raise McpError("--args is not valid JSON")
+    if not isinstance(arguments, dict):
+        raise McpError("--args must be a JSON object")
+    with open_session(config_path, server_name, timeout) as s:
+        result = s.request("prompts/get", {
+            "name": prompt_name, "arguments": arguments})
+    if not isinstance(result, dict):
+        raise McpError(
+            f"server '{server_name}' sent a malformed "
+            "prompts/get result")
+    messages = []
+    for m in result.get("messages") or []:
+        if not isinstance(m, dict):
+            continue
+        content = m.get("content")
+        if isinstance(content, dict):
+            _, text = summarize_result({"content": [content]})
+        elif isinstance(content, str):
+            text = content
+        else:
+            text = ""
+        messages.append({"role": m.get("role") or "",
+                         "text": text})
+    return {"server": server_name, "prompt": prompt_name,
+            "description": result.get("description") or "",
+            "messages": messages}
+
+
 def call_tool(config_path, server_name, tool_name, args_json,
               timeout=DEFAULT_TIMEOUT):
     try:
@@ -464,5 +576,7 @@ def call_tool(config_path, server_name, tool_name, args_json,
 
 __all__ = ["McpError", "load_config", "describe_servers",
            "list_tools", "call_tool", "summarize_result",
+           "list_resources", "read_resource", "list_prompts",
+           "get_prompt",
            "open_session", "PROTOCOL_VERSION", "CLIENT_INFO",
            "DEFAULT_TIMEOUT", "TEXT_CAP"]
