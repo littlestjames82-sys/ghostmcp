@@ -38,12 +38,17 @@ from .client import (DEFAULT_TIMEOUT, McpError, _list_all,
                      summarize_result, TEXT_CAP)
 
 
+IDLE_LIMIT_S = 1800.0  # Cycle 3 I13: reap idle sessions
+
+
 class _Daemon:
     def __init__(self, config_path):
         self.config = config_path
         self._mtime = None
         self._sessions = {}   # name -> session (entered)
         self._calls = {}      # name -> requests served
+        self._born = {}       # name -> monotonic, created
+        self._used = {}       # name -> monotonic, last use
 
     # -- session management --------------------------------
     def _sync_config(self):
@@ -55,6 +60,15 @@ class _Daemon:
             self._drop_all()
             self._mtime = m
 
+    def _reap_idle(self, now):
+        # Cycle 3 I13: lazily close sessions idle past
+        # the limit whenever the daemon is touched, so a
+        # forgotten server cannot hold a process forever.
+        for name in list(self._sessions):
+            if now - self._used.get(name, now) > IDLE_LIMIT_S:
+                self._drop(name)
+                self._calls.pop(name, None)
+
     def _drop_all(self):
         for s in self._sessions.values():
             try:
@@ -62,9 +76,13 @@ class _Daemon:
             except Exception:
                 pass
         self._sessions = {}
+        self._born = {}
+        self._used = {}
 
     def _drop(self, name):
         s = self._sessions.pop(name, None)
+        self._born.pop(name, None)
+        self._used.pop(name, None)
         if s is not None:
             try:
                 s.__exit__()
@@ -73,12 +91,15 @@ class _Daemon:
 
     def _session(self, name, timeout):
         self._sync_config()
+        self._reap_idle(time.monotonic())
         s = self._sessions.get(name)
         if s is None:
             s = open_session(self.config, name, timeout)
             s.__enter__()
             self._sessions[name] = s
             self._calls.setdefault(name, 0)
+            self._born[name] = time.monotonic()
+        self._used[name] = time.monotonic()
         # the client budget is per-session; refresh it so
         # the timeout applies per request instead
         s.timeout = float(timeout)
@@ -196,9 +217,15 @@ class _Daemon:
             return {"config": self.config,
                     "servers": describe_servers(self.config)}
         if verb == "sessions":
-            return {"sessions": [
-                {"server": n, "calls": self._calls.get(n, 0)}
-                for n in sorted(self._sessions)]}
+            # Cycle 3 I15: age + idle per live session.
+            now = time.monotonic()
+            self._reap_idle(now)
+            return {"sessions": [{
+                "server": n,
+                "calls": self._calls.get(n, 0),
+                "age_s": int(now - self._born.get(n, now)),
+                "idle_s": int(now - self._used.get(n, now)),
+            } for n in sorted(self._sessions)]}
         if verb == "shutdown":
             self._drop_all()
             return {"ok": True}
