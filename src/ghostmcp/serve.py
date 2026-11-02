@@ -202,6 +202,15 @@ class _Daemon:
         if verb == "shutdown":
             self._drop_all()
             return {"ok": True}
+        if verb == "drop":
+            # Cycle 3 I1: restart ONE server's session;
+            # its call count resets with the session.
+            name = req.get("server")
+            if not name:
+                raise McpError("drop needs a server name")
+            self._drop(name)
+            self._calls.pop(name, None)
+            return {"ok": True}
         name = req.get("server")
         if not name:
             raise McpError("request needs a server name")
