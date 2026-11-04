@@ -1,5 +1,5 @@
 # GhostMCP
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![CI](https://github.com/littlestjames82-sys/ghostmcp/actions/workflows/ci.yml/badge.svg)](https://github.com/littlestjames82-sys/ghostmcp/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/littlestjames82-sys/ghostmcp)](https://github.com/littlestjames82-sys/ghostmcp/releases) [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
 Ghost-native MCP (Model Context Protocol) **client** for Ghost
 Developer Studio. GhostIDE shells out to GhostMCP to talk to MCP
