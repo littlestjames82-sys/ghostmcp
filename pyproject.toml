@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ghostmcp"
-version = "0.1.0"
+version = "0.3.2"
 description = "Ghost-native MCP (Model Context Protocol) client: list servers, list tools and call tools from a standard MCP config, offline against local stdio servers or over HTTP, stdlib only"
 readme = "README.md"
 license = { text = "MIT" }

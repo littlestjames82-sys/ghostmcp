@@ -3,14 +3,17 @@
 
 Ghost-native MCP (Model Context Protocol) **client** for Ghost
 Developer Studio. GhostIDE shells out to GhostMCP to talk to MCP
-servers from a standard MCP config file — the `.mcp.json` shape
-used across the ecosystem — listing servers, listing a server's
-tools, and calling a tool, in pure Python stdlib so it runs
-anywhere GhostIDE runs, including on-device in the phone APK.
+servers from a standard MCP config file, the `.mcp.json` shape
+used across the ecosystem: listing servers, listing a server's
+tools, calling a tool, reading resources, and fetching prompts,
+in pure Python stdlib so it runs anywhere GhostIDE runs,
+including on-device in the phone APK. A persistent `serve`
+daemon mode keeps one session per server alive across calls
+for interactive use.
 
 MIT licensed. Dependencies: none. Protocol version
 `2024-11-05`; client info `{"name": "ghostmcp", "version":
-"0.1.0"}`. JSON-RPC 2.0 throughout.
+"0.3.2"}`. JSON-RPC 2.0 throughout.
 
 ## Usage
 
@@ -18,10 +21,18 @@ MIT licensed. Dependencies: none. Protocol version
 python -m ghostmcp servers --config <path>
 python -m ghostmcp tools --config <path> --server <name> [--timeout N]
 python -m ghostmcp call --config <path> --server <name> --tool <name> --args '<json object>' [--timeout N]
+python -m ghostmcp resources --config <path> --server <name> [--timeout N]
+python -m ghostmcp resource --config <path> --server <name> --uri <uri> [--timeout N]
+python -m ghostmcp prompts --config <path> --server <name> [--timeout N]
+python -m ghostmcp prompt --config <path> --server <name> --name <name> --args '<json object>' [--timeout N]
+python -m ghostmcp serve --config <path>
 ```
 
-Every verb prints ONE JSON object to stdout. `--timeout` is in
-seconds, covers the whole invocation, and defaults to 30.
+Every one-shot verb prints ONE JSON object to stdout.
+`--timeout` is in seconds, covers the whole invocation, and
+defaults to 30. `serve` is the exception: it reads JSON-line
+requests on stdin and answers one JSON line per request, for
+as long as it runs.
 
 ### servers
 
@@ -62,6 +73,31 @@ capped at 60,000 characters:
 {"server": "files", "tool": "read_file", "isError": false,
  "text": "the file's text"}
 ```
+
+### resources, resource, prompts, prompt
+
+The 0.2.0 verbs round out the read side of the protocol:
+`resources` lists a server's resources (`resources/list`),
+`resource` reads one by URI (`resources/read`), `prompts`
+lists prompts (`prompts/list`), and `prompt` fetches one
+rendered to messages (`prompts/get`). Binary resource contents
+are reported by base64 size only, never dumped.
+
+### serve
+
+`serve` is the persistent session daemon added in 0.3.0. It
+reads JSON-line requests on stdin (`{"id": 1, "verb": "tools",
+"server": "files"}`), answers one JSON line per request, and
+keeps one handshaken session per configured server alive
+across requests, so interactive callers stop paying a fresh
+server spawn for every list or call. The verbs mirror the CLI
+(servers, tools, call, resources, resource, prompts, prompt)
+plus `sessions` and `shutdown`. Sessions are dropped and
+reopened when the config file changes on disk, a request that
+fails on a dead session is retried once on a fresh one, and
+idle sessions are reaped. GhostIDE routes its MCP traffic
+through the daemon and falls back to the one-shot verbs if it
+ever dies.
 
 ### Errors
 
@@ -112,24 +148,26 @@ request in the same invocation. Bodies are accepted as plain
 such as `notifications/initialized` is posted and its (usually
 empty, 202) reply ignored.
 
-## Design: fresh session per call, and its limit
+## Design: two session shapes
 
-There is no daemon and no connection pool: each CLI invocation
-opens a brand-new session, does one listing or one call, and
-tears everything down. That makes every invocation independent
-and crash-proof — a hung or hostile server can cost at most one
-timeout — and it is what lets the same binary serve the desktop
-server and the phone.
+The one-shot verbs open a brand-new session per invocation, do
+one listing or one call, and tear everything down. That makes
+every invocation independent and crash-proof, since a hung or
+hostile server can cost at most one timeout, and it is what
+lets the same binary serve the desktop server and the phone.
 
-The limit follows directly: **a server that keeps state across
-calls inside its own process will not keep it.** Anything held
-in the server's memory (an in-memory cache, a half-finished
-multi-call workflow, a stdio session's working set) resets on
-every call. Servers that keep state in files, in a database, or
-behind an HTTP session the server itself persists are
-unaffected; servers designed around one long-lived stdio
-conversation are a poor fit, and 0.1.0 is honest about that
-rather than pretending otherwise.
+The limit follows directly: **with the one-shot verbs, a
+server that keeps state across calls inside its own process
+will not keep it.** Anything held in the server's memory (an
+in-memory cache, a half-finished multi-call workflow, a stdio
+session's working set) resets on every call.
+
+The `serve` daemon exists for exactly that limit. Callers that
+need cross-call state or interactive speed hold sessions open
+through the daemon; callers that need isolation use the
+one-shot verbs. Servers that keep state in files, in a
+database, or behind an HTTP session the server itself persists
+are unaffected either way.
 
 ## Security
 
@@ -144,15 +182,17 @@ rather than pretending otherwise.
   `command` with the invoking user's privileges. Only point
   GhostMCP at configs you trust, exactly as with any MCP host.
 
-## Scope of 0.1.0 — honestly
+## Scope of 0.3.2, honestly
 
-GhostMCP implements the client basics: `initialize`,
-`tools/list`, `tools/call`, over stdio and HTTP. It does **not**
-implement OAuth or any auth flow, sampling or elicitation
-(server-initiated requests beyond `ping` are refused), the
-resources or prompts verbs, tool-list change notifications, or
-long-lived sessions. Those land only if a real GhostIDE need
-pulls them in.
+GhostMCP implements the client read-and-call surface:
+`initialize`, `tools/list`, `tools/call`, `resources/list`,
+`resources/read`, `prompts/list`, and `prompts/get`, over
+stdio and HTTP, in one-shot CLI verbs and in the persistent
+`serve` daemon. It does **not** implement OAuth or any auth
+flow, sampling or elicitation (server-initiated requests
+beyond `ping` are refused), or tool-list change
+notifications. Those land only if a real GhostIDE need pulls
+them in.
 
 ---
 <!-- ghost-studio-footer -->
