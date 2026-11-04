@@ -1,4 +1,5 @@
 # GhostMCP
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Ghost-native MCP (Model Context Protocol) **client** for Ghost
 Developer Studio. GhostIDE shells out to GhostMCP to talk to MCP
@@ -152,3 +153,16 @@ implement OAuth or any auth flow, sampling or elicitation
 resources or prompts verbs, tool-list change notifications, or
 long-lived sessions. Those land only if a real GhostIDE need
 pulls them in.
+
+---
+<!-- ghost-studio-footer -->
+## More from Ghost Developer Studio
+
+Ghost Developer Studio builds developer tools, AI-agent safety software, and practical apps, and sells by showing working software, not slide decks.
+
+- [Roadmap board](https://github.com/littlestjames82-sys/ghost-roadmaps): where every studio product stands
+- [Agent Seatbelt](https://github.com/littlestjames82-sys/agent-seatbelt): deterministic guardrails for AI coding agents
+- [Ghost Hands](https://github.com/littlestjames82-sys/ghost-hands): governed, recorded, replayable agent hands
+- [GhostSlice](https://github.com/littlestjames82-sys/ghostslice): agent context and prompt optimizer
+- [GhostIDE](https://github.com/littlestjames82-sys/ghostide-android): fully offline AI code editor for Android
+- [All studio projects](https://github.com/littlestjames82-sys?tab=repositories)
