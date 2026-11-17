@@ -60,9 +60,11 @@ def load_config(config_path):
 
 
 def _entry_parts(name, entry):
-    """(transport, target, env_names) for one server entry.
+    """(transport, target, env_names, header_names) for one
+    server entry.
 
-    Env values are deliberately never part of the result.
+    Env and header values are deliberately never part of
+    the result - only their names leave this module.
     """
     if not isinstance(entry, dict):
         raise McpError(f"server '{name}' is not a config object")
@@ -70,16 +72,20 @@ def _entry_parts(name, entry):
     if not isinstance(env, dict):
         raise McpError(f"server '{name}' has a non-object env")
     env_names = sorted(str(k) for k in env)
+    headers = entry.get("headers") or {}
+    if not isinstance(headers, dict):
+        raise McpError(f"server '{name}' has a non-object headers")
+    header_names = sorted(str(k) for k in headers)
     url = entry.get("url")
     if url:
-        return "http", str(url), env_names
+        return "http", str(url), env_names, header_names
     command = entry.get("command")
     if command:
         args = entry.get("args") or []
         if not isinstance(args, list):
             raise McpError(f"server '{name}' has a non-list args")
         target = " ".join([str(command)] + [str(a) for a in args])
-        return "stdio", target, env_names
+        return "stdio", target, env_names, header_names
     raise McpError(
         f"server '{name}' has neither a command (stdio) nor a "
         "url (http)")
@@ -90,10 +96,11 @@ def describe_servers(config_path):
     servers = load_config(config_path)
     out = []
     for name in sorted(servers):
-        transport, target, env_names = _entry_parts(
-            name, servers[name])
+        transport, target, env_names, header_names = \
+            _entry_parts(name, servers[name])
         out.append({"name": name, "transport": transport,
-                    "target": target, "env_names": env_names})
+                    "target": target, "env_names": env_names,
+                    "header_names": header_names})
     return out
 
 
@@ -298,6 +305,16 @@ class HttpSession(_Session):
     def __init__(self, name, entry, timeout):
         super().__init__(name, timeout)
         self.url = str(entry["url"])
+        # Static per-server headers from the config (the
+        # usual case is an Authorization bearer token). The
+        # values ride every request and are never returned
+        # or printed anywhere, like env values.
+        raw_headers = entry.get("headers") or {}
+        if not isinstance(raw_headers, dict):
+            raise McpError(
+                f"server '{name}' has a non-object headers")
+        self.headers = {str(k): str(v)
+                        for k, v in raw_headers.items()}
         self.session_id = None
 
     def __enter__(self):
@@ -316,6 +333,7 @@ class HttpSession(_Session):
         body = json.dumps(payload).encode("utf-8")
         headers = {"Content-Type": "application/json",
                    "Accept": "application/json, text/event-stream"}
+        headers.update(self.headers)
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
         req = urllib.request.Request(
@@ -394,7 +412,7 @@ def open_session(config_path, server_name, timeout):
     """A context manager yielding a handshaken session."""
     servers = load_config(config_path)
     entry = _get_entry(servers, server_name)
-    transport, _, _ = _entry_parts(server_name, entry)
+    transport, _, _, _ = _entry_parts(server_name, entry)
     if transport == "http":
         return HttpSession(server_name, entry, timeout)
     return StdioSession(server_name, entry, timeout)
@@ -420,6 +438,7 @@ def list_tools(config_path, server_name, timeout=DEFAULT_TIMEOUT):
                     "name": t.get("name"),
                     "description": t.get("description") or "",
                     "inputSchema": t.get("inputSchema") or {},
+                    "annotations": t.get("annotations") or {},
                 })
             cursor = result.get("nextCursor")
             if not cursor:

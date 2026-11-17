@@ -122,6 +122,7 @@ class _Daemon:
                         "name": t.get("name"),
                         "description": t.get("description") or "",
                         "inputSchema": t.get("inputSchema") or {},
+                        "annotations": t.get("annotations") or {},
                     })
             cursor = result.get("nextCursor")
             if not cursor:

@@ -13,7 +13,7 @@ for interactive use.
 
 MIT licensed. Dependencies: none. Protocol version
 `2024-11-05`; client info `{"name": "ghostmcp", "version":
-"0.3.2"}`. JSON-RPC 2.0 throughout.
+"0.4.0"}`. JSON-RPC 2.0 throughout.
 
 ## Usage
 
@@ -182,17 +182,22 @@ are unaffected either way.
   `command` with the invoking user's privileges. Only point
   GhostMCP at configs you trust, exactly as with any MCP host.
 
-## Scope of 0.3.2, honestly
+## Scope of 0.4.0, honestly
 
 GhostMCP implements the client read-and-call surface:
 `initialize`, `tools/list`, `tools/call`, `resources/list`,
 `resources/read`, `prompts/list`, and `prompts/get`, over
 stdio and HTTP, in one-shot CLI verbs and in the persistent
-`serve` daemon. It does **not** implement OAuth or any auth
-flow, sampling or elicitation (server-initiated requests
-beyond `ping` are refused), or tool-list change
-notifications. Those land only if a real GhostIDE need pulls
-them in.
+`serve` daemon. Auth is header-based: per-server `headers`
+from the config (the usual case is an Authorization bearer
+token) ride every HTTP request, and only the header names
+are ever listed, never the values. GhostMCP does not run an
+interactive OAuth flow itself; GhostIDE layers OAuth 2.0
+with PKCE on top of this header support for servers that
+need it. It does **not** implement sampling or elicitation
+(server-initiated requests beyond `ping` are refused), or
+tool-list change notifications. Those land only if a real
+GhostIDE need pulls them in.
 
 ---
 <!-- ghost-studio-footer -->

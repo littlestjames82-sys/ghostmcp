@@ -3,6 +3,23 @@
 All notable changes to GhostMCP. Versions follow the package
 version in `src/ghostmcp/__init__.py`.
 
+## 0.4.0 (November 2026)
+
+- HTTP servers: per-server `headers` from the config (the
+  usual case is an Authorization bearer token) are now sent
+  on every request. The HTTP transport previously ignored
+  them entirely, so header-authenticated servers could not
+  be reached. The `servers` listing reports header names
+  only; values are never printed or returned.
+- Tool annotations from `tools/list` (`readOnlyHint`,
+  `destructiveHint`, `openWorldHint`, and any others) are
+  preserved and reported by the CLI verbs and the `serve`
+  daemon instead of being silently dropped.
+- New tests cover both fixes (21 tests total). These changes
+  came out of the GhostIDE D8 MCP polish work, where the
+  dropped headers and annotations were found against a
+  fixture server.
+
 ## 0.3.2 (November 2026)
 
 - Serve daemon refinements from the GhostIDE Cycle 3 work:

@@ -17,4 +17,4 @@ values from the config are passed to stdio servers but never
 printed — only env names are ever reported.
 """
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
